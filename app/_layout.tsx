@@ -1,24 +1,77 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+// File: app/_layout.tsx
+import React, { useEffect } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { AuthProvider, useAuth } from '@/src/context/AuthContext';
+import { ThemeProvider } from '@/src/context/ThemeContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// Screens in (auth) group that are allowed even when session exists
+const AUTH_SCREENS_ALLOWED_WHILE_LOGGED_IN = ['username-setup', 'update-password', 'auth-callback'];
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+function RootNavigationGuard() {
+  const { session, role, profile, roleLoaded, initialized } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    if (!initialized) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+    const inAdminGroup = segments[0] === '(admin)';
+    const currentScreen = segments.length > 1 ? segments[1] : '';
+
+    // Allow special auth screens to run even when logged in
+    const isSpecialAuthScreen = AUTH_SCREENS_ALLOWED_WHILE_LOGGED_IN.includes(currentScreen);
+
+    if (!session && !inAuthGroup) {
+      // Not logged in → go to login
+      router.replace('/(auth)/login');
+
+    } else if (session && inAuthGroup && !isSpecialAuthScreen) {
+      // Logged in on a regular auth page → check if username setup needed
+      if (roleLoaded && profile !== null && !profile?.username) {
+        router.replace('/(auth)/username-setup');
+      } else if (roleLoaded) {
+        router.replace('/(user)/discover');
+      }
+
+    } else if (session && !inAuthGroup && !inAdminGroup) {
+      // In the app — check if OAuth/Magic Link user needs a username
+      // ONLY redirect if profile row loaded AND username field is truly empty
+      if (roleLoaded && profile !== null && !profile?.username && currentScreen !== 'username-setup') {
+        router.replace('/(auth)/username-setup');
+      }
+
+    } else if (session && inAdminGroup) {
+      // Block PLAYER role from admin screens
+      if (role && role === 'PLAYER') {
+        router.replace('/(user)/discover');
+      }
+    }
+  }, [session, initialized, segments, role, profile, roleLoaded]);
+
+  if (!initialized) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(user)" />
+      <Stack.Screen name="(admin)" />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <RootNavigationGuard />
+          </ThemeProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

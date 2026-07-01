@@ -13,6 +13,10 @@ const OPENWEATHER_API_KEY =
 // Requirement 09: Five distinct Pakistani cities for fallback rotation
 const FALLBACK_CITIES = ['Karachi', 'Lahore', 'Islamabad', 'Peshawar', 'Quetta'];
 
+const getRandomFallbackCity = (): string => {
+  return FALLBACK_CITIES[Math.floor(Math.random() * FALLBACK_CITIES.length)];
+};
+
 export interface WeatherData {
   city: string;
   country: string;
@@ -54,29 +58,41 @@ export const useLocationWeather = () => {
     const fetchWeather = async () => {
       try {
         if (!OPENWEATHER_API_KEY) {
-          throw new Error('OpenWeather API key not configured. Add EXPO_PUBLIC_OPENWEATHER_KEY to .env file.');
+          setError('OpenWeather API key not configured. Add EXPO_PUBLIC_OPENWEATHER_KEY to .env file.');
+          return;
         }
 
         const base = `https://api.openweathermap.org/data/2.5/weather?appid=${OPENWEATHER_API_KEY}&units=metric`;
+        const fallbackCity = getRandomFallbackCity();
 
-        // Requirement 09B: Try hardware GPS first
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        // Requirement 09B: Try hardware GPS first, but never let permission or GPS failures crash boot.
+        let shouldUseFallbackCity = true;
 
-        if (status === 'granted') {
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          const url = `${base}&lat=${location.coords.latitude}&lon=${location.coords.longitude}`;
-          await fetchByUrl(url, false);
-        } else {
-          // Requirement 09C: GPS denied → pick a random Pakistani city from the 5
-          const randomCity = FALLBACK_CITIES[Math.floor(Math.random() * FALLBACK_CITIES.length)];
-          const url = `${base}&q=${randomCity},PK`;
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+
+          if (status === 'granted') {
+            try {
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+              const url = `${base}&lat=${location.coords.latitude}&lon=${location.coords.longitude}`;
+              await fetchByUrl(url, false);
+              shouldUseFallbackCity = false;
+            } catch (locationErr) {
+              console.warn('GPS lookup failed, falling back to a Pakistani city.', locationErr);
+            }
+          }
+        } catch (permissionErr) {
+          console.warn('Location permission request failed, falling back to a Pakistani city.', permissionErr);
+        }
+
+        if (shouldUseFallbackCity) {
+          const url = `${base}&q=${fallbackCity},PK`;
           await fetchByUrl(url, true);
         }
       } catch (err: any) {
-        // Axios interceptor formats the error message; just use it directly
-        setError(err.message ?? 'Unable to fetch weather data.');
+        setError(err?.message ?? 'Unable to fetch weather data.');
       } finally {
         setLoading(false);
       }

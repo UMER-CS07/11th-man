@@ -1,9 +1,9 @@
 // File: app/_layout.tsx
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { ThemeProvider } from '@/src/context/ThemeContext';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Screens in (auth) group that are allowed even when session exists
@@ -13,6 +13,13 @@ function RootNavigationGuard() {
   const { session, role, profile, roleLoaded, initialized } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const currentPath = `/${segments.join('/')}`;
+
+  const replaceIfNeeded = (path: string) => {
+    if (currentPath !== path) {
+      router.replace(path);
+    }
+  };
 
   useEffect(() => {
     if (!initialized) return;
@@ -26,27 +33,27 @@ function RootNavigationGuard() {
 
     if (!session && !inAuthGroup) {
       // Not logged in → go to login
-      router.replace('/(auth)/login');
+      replaceIfNeeded('/(auth)/login');
 
     } else if (session && inAuthGroup && !isSpecialAuthScreen) {
       // Logged in on a regular auth page → check if username setup needed
       if (roleLoaded && profile !== null && !profile?.username) {
-        router.replace('/(auth)/username-setup');
+        replaceIfNeeded('/(auth)/username-setup');
       } else if (roleLoaded) {
-        router.replace('/(user)/discover');
+        replaceIfNeeded('/(user)/discover');
       }
 
     } else if (session && !inAuthGroup && !inAdminGroup) {
       // In the app — check if OAuth/Magic Link user needs a username
       // ONLY redirect if profile row loaded AND username field is truly empty
       if (roleLoaded && profile !== null && !profile?.username && currentScreen !== 'username-setup') {
-        router.replace('/(auth)/username-setup');
+        replaceIfNeeded('/(auth)/username-setup');
       }
 
     } else if (session && inAdminGroup) {
       // Block PLAYER role from admin screens
       if (role && role === 'PLAYER') {
-        router.replace('/(user)/discover');
+        replaceIfNeeded('/(user)/discover');
       }
     }
   }, [session, initialized, segments, role, profile, roleLoaded]);

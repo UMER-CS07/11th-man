@@ -15,6 +15,10 @@ export const storageService = {
     mimeType: string,
     onProgress: (percentage: number) => void
   ): Promise<string> => {
+    if (!SUPABASE_URL) {
+      throw new Error('Supabase storage endpoint is not configured.');
+    }
+
     // 1. Grab the active authenticated session token
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required for upload');

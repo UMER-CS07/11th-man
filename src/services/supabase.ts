@@ -7,18 +7,21 @@ import Constants from 'expo-constants';
 // Falls back to process.env for web/testing environments
 const supabaseUrl =
   (Constants.expoConfig?.extra?.supabaseUrl as string | undefined) ??
-  (process.env.EXPO_PUBLIC_SUPABASE_URL as string);
+  (process.env.EXPO_PUBLIC_SUPABASE_URL as string | undefined);
 
 const supabaseAnonKey =
   (Constants.expoConfig?.extra?.supabaseAnonKey as string | undefined) ??
-  (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string);
+  (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string | undefined);
+
+const safeSupabaseUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const safeSupabaseAnonKey = supabaseAnonKey || 'public-anon-key';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables! Check app.config.js extra block.');
 }
 
 // Initialize the client with session persistence configuration
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+export const supabase = createClient(safeSupabaseUrl, safeSupabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

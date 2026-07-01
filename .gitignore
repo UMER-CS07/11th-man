@@ -39,6 +39,9 @@ yarn-error.*
 
 app-example
 
+# EAS build config (contains embedded API keys - do NOT commit)
+eas.json
+
 # generated native folders
 /ios
 /android
